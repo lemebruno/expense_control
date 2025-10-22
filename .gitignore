@@ -1,0 +1,36 @@
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local configs and databases
+*.db
+*.sqlite3
+*.log
+logs/
+.env
+*.env
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# PyInstaller build files
+*.spec
+dist/
+build/
+
+# Jupyter / Streamlit
+.ipynb_checkpoints/
+.streamlit/
+
+# IDEs and editors
+.vscode/
+.idea/
