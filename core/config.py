@@ -6,6 +6,8 @@ import logging
 logger = logging.getLogger(__name__)
 import os
 import re
+import uuid # for unique temp file names
+from typing import Optional # For type hinting optional values
 
 
 
@@ -16,11 +18,11 @@ class Settings:
     DB_REMOTE_PATH:str
     DB_NAME: str
     DB_LOCAL_DIR: Path
-    DB_LOCAL_PATH: Path
+    DB_BACKUP_DIR: Path
     DB_BACKUP_DIR:Path | None = None
-    journal_mode: str = "DELETE" # To facilitate transactions on cloud
-    busy_timeout_ms: int = 5000 # Just for precaution
-    synchronous: str = "NORMAL"
+    DB_JOURNAL_MODE: str = "DELETE" # To facilitate transactions on cloud
+    DB_BUSY_TIMEOUT_MS: int = 5000 # Just for precaution
+    DB_SYNCHRONOUS: str = "NORMAL"
 
 def _load_env_if_present() -> None:
     try:
@@ -32,28 +34,28 @@ def _load_env_if_present() -> None:
 def _read_env_raw() -> dict[str,str]:
     """Reads environment variables already with .env applied and returns raw values (strings)."""
     
-    _load_env_if_present #trying env
+    _load_env_if_present() #trying env
 
     token = os.environ.get("DROPBOX_TOKEN","")
     remote = os.environ.get("DB_REMOTE_PATH","")
     name = os.environ.get("DB_NAME","")
     local = os.environ.get("DB_LOCAL_DIR","")
-    backup = os.environ.get("DB_LOCAL_PATH","")
+    backup = os.environ.get("DB_BACKUP_DIR","")
 
     #OPTIONAL
-    journal = os.environ.get("journal_mode","")
-    busy = os.environ.get("busy_timeout_ms","")
-    sync = os.environ.get("synchronous","")
+    journal = os.environ.get("DB_JOURNAL_MODE","")
+    busy = os.environ.get("DB_BUSY_TIMEOUT_MS","")
+    sync = os.environ.get("DB_SYNCHRONOUS","")
 
     return{
         "DROPBOX_TOKEN": token,
         "DB_REMOTE_PATH": remote,
         "DB_NAME": name,
         "DB_LOCAL_DIR": local,
-        "DB_LOCAL_PATH": backup,
-        "journal_mode": journal,
-        "busy_timeout_ms": busy,
-        "synchronous": sync
+        "DB_BACKUP_DIR": backup,
+        "DB_JOURNAL_MODE": journal,
+        "DB_BUSY_TIMEOUT_MS": busy,
+        "DB_SYNCHRONOUS": sync
     } 
 
 def _normalize_remote_path(raw_remote:str,raw_name:str)-> str:
@@ -97,18 +99,55 @@ def _normalize_remote_path(raw_remote:str,raw_name:str)-> str:
     return remote
 
 
-errs = [
-    ("/apenas/diretorio/",""),
-    ("/expense/../segredo","data"),
-    ("/./expense","data"),
-]
-for r,n in errs:
+
+
+
+
+def _assert_writable_dir(dir_path:Path) -> None:
+    """Checks if the given directory path is writable by attempting to create and delete a temp file.
+     Raises ValueError if not writable.
+     """
+    tmp_name = f".__write_teste_{uuid.uuid4().hex}__.tmp" #unique temp file name
+    tmp_path = dir_path / tmp_name # The / operator joins paths
     try:
-        _normalize_remote_path(r,n)
-    except ValueError as e:
-        print("ERR OK:", r,n,"->", e)
+        tmp_path.write_bytes(b"ok")
+
+        # If write succeeded, delete the temp file
+        tmp_path.unlink() 
+    except Exception as e:
+        raise ValueError(
+            f"DB_BACKUP_DIR path is not writable: {dir_path} | Error: {e}"
+            "\nPlease provide a writable directory.Or set up another path in DB_BACKUP_DIR environment variable."
+            ) from e
+
+
+
+def _resolve_local_dir(raw_local:str) ->Path:
+    """
+    """
+    raw = (raw_local or "").strip() #handle None and whitespace
+
+    # Resolve path
+    if raw:
+        dir_path = Path(raw).expanduser().resolve()
+    else:
+        base = os.getenv("LOCALAPPDATA")
+        if not base:
+            base = str(Path.home()/"AppData"/"Local")
+        dir_path = Path(base)/ "ExpenseControl"
+    
+    dir_path.mkdir(parents=True,exist_ok=True) #ensure dir exists and create if not
+
+    _assert_writable_dir(dir_path)
+
+    return dir_path
 
 
 
 
+if __name__ == "__main__":
+    env = _read_env_raw()
+    local_dir = _resolve_local_dir(env.get("DB_LOCAL_DIR",""))
+    print("Local dir resolved to:",local_dir)
 
+    
