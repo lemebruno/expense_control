@@ -12,7 +12,13 @@ from typing import TypedDict # For structured dicts
 from functools import lru_cache # For caching function results
 
 
+#This module handles application configuration settings,
+#loading them from environment variables (with optional .env support),
+#validating them, and providing a typed interface for access.
 
+
+
+#The Settings dataclass holds all configuration settings
 @dataclass(frozen=True) #imutable
 
 class Settings:
@@ -25,6 +31,7 @@ class Settings:
     DB_JOURNAL_MODE: str = "DELETE" # To facilitate transactions on cloud
     DB_BUSY_TIMEOUT_MS: int = 5000 # Just for precaution
     DB_SYNCHRONOUS: str = "NORMAL"
+    LOG_DIR: Path | None = None
 
     @property
     def dropbox_token(self) -> str:
@@ -53,6 +60,9 @@ class Settings:
     @property
     def db_synchronous(self) -> str:
         return self.DB_SYNCHRONOUS
+    @property
+    def log_dir(self) -> Optional[Path]:
+        return self.LOG_DIR
     
     
 
@@ -73,6 +83,7 @@ def _read_env_raw() -> dict[str,str]:
     name = os.environ.get("DB_NAME","")
     local = os.environ.get("DB_LOCAL_DIR","")
     backup = os.environ.get("DB_BACKUP_DIR","")
+    log_dir = os.environ.get("LOG_DIR","")
 
     #OPTIONAL
     journal = os.environ.get("DB_JOURNAL_MODE","")
@@ -85,6 +96,7 @@ def _read_env_raw() -> dict[str,str]:
         "DB_NAME": name,
         "DB_LOCAL_DIR": local,
         "DB_BACKUP_DIR": backup,
+        "LOG_DIR": log_dir,
         "DB_JOURNAL_MODE": journal,
         "DB_BUSY_TIMEOUT_MS": busy,
         "DB_SYNCHRONOUS": sync
@@ -192,10 +204,10 @@ def _normalize_db_name(raw_name: str) ->str:
 
 
 def _build_db_local_path(local_dir: Path, raw_name:str) ->Path:
-    """ Builds the full local database file path by combining the local directory and normalized database name.
-        
+    """ 
+    Builds the full local database file path by combining the local directory and normalized database name.
+    
     """
-
     name = _normalize_db_name(raw_name)
     return local_dir / name
 
@@ -292,15 +304,23 @@ def _build_settings(env: dict[str,str]) -> Settings:
     busy_timeout_ms = pragmas["busy_timeout_ms"]
     synchronous = pragmas["synchronous"]
 
-    #6. Backup dir (optional, validated path)
+    #6. Backup dir (auto defined if empty)
     raw_backup = (env.get("DB_BACKUP_DIR","") or "").strip()
     if raw_backup:
-        db_backup_dir = Path(raw_backup).expanduser().resolve()
-        db_backup_dir.mkdir(parents=True,exist_ok=True)
-        _assert_writable_dir(db_backup_dir)
+        db_backup_dir = Path(raw_backup).expanduser().resolve()        
     else:
-        db_backup_dir = None
+        db_backup_dir = local_dir / "backups"
+    db_backup_dir.mkdir(parents=True,exist_ok=True) #ensure dir exists
+    _assert_writable_dir(db_backup_dir)
 
+    #7 Log dir (auto defined if empty)
+    raw_log_dir = (env.get("LOG_DIR","") or "").strip()
+    if raw_log_dir:
+        log_dir = Path(raw_log_dir).expanduser().resolve()
+    else:
+        log_dir = local_dir / "logs"
+    log_dir.mkdir(parents=True,exist_ok=True) #ensure dir exists
+    _assert_writable_dir(log_dir)
     
 
     #7. Build and return Settings
@@ -313,7 +333,8 @@ def _build_settings(env: dict[str,str]) -> Settings:
         DB_BACKUP_DIR=db_backup_dir,
         DB_JOURNAL_MODE=journal_mode,
         DB_BUSY_TIMEOUT_MS=busy_timeout_ms,
-        DB_SYNCHRONOUS=synchronous
+        DB_SYNCHRONOUS=synchronous,
+        LOG_DIR=log_dir
     )
     _validate_required(settings)
     return settings
