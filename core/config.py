@@ -358,11 +358,16 @@ def refresh_settings() ->None:
 
 def get_db_path() -> Path:
     """
-     Public function to get the local database file path.`
-    """
+     Public function to get the local database file path.
+     """
     
     return get_settings().DB_LOCAL_PATH
 
+def get_log_dir() -> Path:
+    """
+    Returns log folder
+    """
+    return get_settings().log_dir
 
 def _validate_required(settings:Settings) ->None:
     """
@@ -387,6 +392,9 @@ def _validate_required(settings:Settings) ->None:
         raise ValueError(
             "DB_REMOTE_PATH must point to a .db file. Please provide a valid database file path in the DB_REMOTE_PATH environment variable."
         )
+    
+
+
     
 
 
