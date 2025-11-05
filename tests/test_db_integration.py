@@ -9,11 +9,11 @@ How to run:
 
 from __future__ import annotations
 
-import threading            # threading: to simulate a write lock released later
-import time                 # sleep: to control lock timing
-from typing import Any      # typing: type hints for clarity
+import threading            
+import time                 
+from typing import Any      
 
-from core.db import (       # import the public API of your db layer
+from core.db import (      
     connect_db,
     ensure_db_ready,
     ensure_schema,
