@@ -91,6 +91,7 @@ class Expense:
 # -----------------------------------------------------------------------------
 # User model
 # -----------------------------------------------------------------------------
+@dataclass(slots=True)
 class User:
     """
     User domain model used for authentication.

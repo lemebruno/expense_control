@@ -35,7 +35,7 @@ from core.validators import (
     validate_note,
 )
 from core.models import Expense
-from core import repo_expense
+from core import repo_expense, repo_user
 from core import sync_cycle
 from core import auth
 
@@ -52,19 +52,92 @@ def page_login() -> None:
         st.warning(f"Database is not ready: {db_error}")
         return
 
-    
-    email = st.text_input("Email", key="login_email")
-    password = st.text_input("Password", type="password", key="login_password")
+    # Flag to toggle between login view and registration view
+    if "show_register" not in st.session_state:
+        st.session_state["show_register"] = False
 
-    if st.button("Login", key="login_submit"):
-        success, user, message = auth.authenticate(email, password)
-        if success and user is not None:
-            st.session_state["auth_user"] = user.email
-            st.session_state["user_id"] = user.id
-            st.success("Login successful.")
+    # -------------------------------------------------------------------------
+    # Login view
+    # -------------------------------------------------------------------------
+    if not st.session_state["show_register"]:
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_password")
+
+        if st.button("Login", key="login_submit"):
+            success, user, message = auth.authenticate(email, password)
+            if success and user is not None:
+                st.session_state["auth_user"] = user.email
+                st.session_state["user_id"] = user.id
+                st.success("Login successful.")
+                st.rerun()
+            else:
+                st.error(message or "Authentication failed.")
+
+        # “Link” to open registration form
+        st.markdown("")
+        st.text("Don't have an account yet?")
+        if st.button("Create an account", key="show_register_btn"):
+            st.session_state["show_register"] = True
             st.rerun()
-        else:
-            st.error(message or "Authentication failed.")
+
+    # -------------------------------------------------------------------------
+    # Registration view
+    # -------------------------------------------------------------------------
+    else:
+        st.subheader("Create a new account")
+
+        reg_email = st.text_input("New email", key="register_email")
+        reg_password = st.text_input("New password", type="password", key="register_password")
+        reg_password_confirm = st.text_input(
+            "Confirm password",
+            type="password",
+            key="register_password_confirm",
+        )
+
+        if st.button("Register", key="register_submit"):
+            email_norm = (reg_email or "").strip().lower()
+            if not email_norm:
+                st.error("Email is required for registration.")
+                return
+            if not reg_password:
+                st.error("Password is required for registration.")
+                return
+            if reg_password != reg_password_confirm:
+                st.error("Password confirmation does not match.")
+                return
+
+            # Check if user already exists
+            try:
+                existing = repo_user.get_by_email(email_norm)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Failed to check existing user: %s", exc)
+                st.error("Failed to check existing user. Please try again.")
+                return
+
+            if existing is not None:
+                st.error("An account with this email already exists.")
+                return
+
+            # Create user with Argon2id hash
+            try:
+                password_hash = auth.hash_password(reg_password)
+                new_id = repo_user.insert(email_norm, password_hash)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Failed to register user: %s", exc)
+                st.error(f"Failed to register user: {exc}")
+                return
+
+            st.success("User registered successfully. You can now log in.")
+            # Pre-fill login email and go back to login view
+            st.session_state["login_email"] = email_norm
+            st.session_state["show_register"] = False
+            st.rerun()
+
+        # “Link” to go back to login
+        st.markdown("")
+        if st.button("Back to login", key="back_to_login"):
+            st.session_state["show_register"] = False
+            st.rerun()          
 
 # -----------------------------------------------------------------------------
 # Configure default category tree (only if not already provided elsewhere)
