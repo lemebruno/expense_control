@@ -37,9 +37,34 @@ from core.validators import (
 from core.models import Expense
 from core import repo_expense
 from core import sync_cycle
+from core import auth
+
+
 
 logger = logging.getLogger(__name__)
 
+
+def page_login() -> None:
+    st.header("Login")
+    ensure_db_ready()
+    db_error = st.session_state.get("db_error")
+    if db_error:
+        st.warning(f"Database is not ready: {db_error}")
+        return
+
+    
+    email = st.text_input("Email", key="login_email")
+    password = st.text_input("Password", type="password", key="login_password")
+
+    if st.button("Login", key="login_submit"):
+        success, user, message = auth.authenticate(email, password)
+        if success and user is not None:
+            st.session_state["auth_user"] = user.email
+            st.session_state["user_id"] = user.id
+            st.success("Login successful.")
+            st.rerun()
+        else:
+            st.error(message or "Authentication failed.")
 
 # -----------------------------------------------------------------------------
 # Configure default category tree (only if not already provided elsewhere)
@@ -466,13 +491,20 @@ def page_analysis() -> None:
 def main() -> None:
     st.set_page_config(page_title="Expense Control", layout="wide")
 
+    # Authentication check
+    if "auth_user" not in st.session_state:
+        page_login()
+        return
+
     st.sidebar.title("Expense Control")
-    
+    if st.sidebar.button("Logout"):
+        st.session_state.pop("auth_user", None)
+        st.session_state.pop("user_id", None)
+        st.rerun()
 
-    tab = st.sidebar.radio("Select page", ["Insert Data", "Analysis"])
-
+    tab = st.sidebar.radio("Select page", ["Insert Data", "Analysis"], index=0)
     if tab == "Insert Data":
-        page_insert() 
+        page_insert()
     else:
         page_analysis()
 

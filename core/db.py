@@ -194,6 +194,20 @@ def _migration_1_create_baseline(conn: "PGConnection") -> None:
 
 MIGRATIONS[1] = _migration_1_create_baseline
 
+def _migration_2_create_users(conn: "PGConnection") -> None:
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+    conn.commit()
+
+MIGRATIONS[2] = _migration_2_create_users
+
 def _migrate(conn: "PGConnection", target_version: int) -> None:
     """
     Applies incremental migrations up to 'target_version'.
@@ -226,6 +240,7 @@ def _migrate(conn: "PGConnection", target_version: int) -> None:
             conn.rollback()
             logger.error("Migration to v%s failed: %s", nxt, exc)
             raise
+
 
 
 # -----------------------------------------------------------------------------
