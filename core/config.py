@@ -19,8 +19,8 @@ from functools import lru_cache # For caching function results
 
 
 #The Settings dataclass holds all configuration settings
-@dataclass(frozen=True) #imutable
 
+@dataclass(frozen=True) #imutable
 class Settings:
     SUPABASE_URL: str
     SUPABASE_KEY: str
@@ -83,7 +83,7 @@ def _build_settings(env: dict[str,str]) -> Settings:
     supabase_key = (env.get("SUPABASE_KEY") or "").strip()
     supabase_db_url = (env.get("SUPABASE_DB_URL") or "").strip() or None
 
-    # Diretório de logs: se não informado, criar pasta padrão
+    # Log directory: if not provided, create a sensible default (~/.expensecontrol/logs)
     raw_log_dir = (env.get("LOG_DIR") or "").strip()
     if raw_log_dir:
         log_dir = Path(raw_log_dir).expanduser().resolve()

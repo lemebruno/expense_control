@@ -22,8 +22,8 @@ from __future__ import annotations
 import logging
 import time
 
-from core.db import ensure_db_ready, ensure_schema
-# Dropbox sync is no longer used with PostgreSQL/Supabase
+from .db import ensure_db_ready, ensure_schema
+
 
 logger = logging.getLogger(__name__)
 

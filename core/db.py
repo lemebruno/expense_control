@@ -1,14 +1,16 @@
 import psycopg2
 import psycopg2.extras
 from psycopg2.extensions import connection as PGConnection, cursor as PGCursor
-from core.config import get_settings, get_log_dir
+from .config import get_settings, get_log_dir
 import time
 from functools import wraps # For decorators
 from typing import Callable, TypeVar, Any # For type hinting
 from contextlib import contextmanager
 import logging
 from logging.handlers import RotatingFileHandler
-
+from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 
 
@@ -17,19 +19,59 @@ from logging.handlers import RotatingFileHandler
 
 def connect_db() -> PGConnection:
     """
-    Cria e retorna uma nova conexão ao PostgreSQL utilizando a string de conexão
-    fornecida em SUPABASE_DB_URL. Usa RealDictCursor para retornar dicts.
+    Create and return a PostgreSQL connection.
+    Priority:
+      1) Discrete env vars (host/user/password/db/port/sslmode)
+      2) Fallback to SUPABASE_DB_URL (DSN/URI)
     """
+    # --- Path 1: discrete params (recomendado) ---
+    # Ensure .env is loaded before reading os.getenv
+    load_dotenv()
+    host = (os.getenv("SUPABASE_DB_HOST") or "").strip()
+    user = (os.getenv("SUPABASE_DB_USER") or "postgres").strip()
+    password = (os.getenv("SUPABASE_DB_PASSWORD") or "").strip()
+    dbname = (os.getenv("SUPABASE_DB_NAME") or "postgres").strip()
+    port = int((os.getenv("SUPABASE_DB_PORT") or "5432").strip())
+    sslmode = (os.getenv("SUPABASE_DB_SSLMODE") or "require").strip() or "require"
+
+    if host and password:
+        try:
+            conn: PGConnection = psycopg2.connect(
+                host=host,
+                user=user,
+                password=password,
+                dbname=dbname,
+                port=port,
+                sslmode=sslmode,
+                cursor_factory=psycopg2.extras.RealDictCursor,
+            )
+            return conn
+        except Exception as e:
+            raise RuntimeError(f"Failed to connect with discrete params: {e}")
+
+    # --- Path 2: DSN/URI (fallback) ---
     settings = get_settings()
-    if not settings.supabase_db_url:
+    dsn = (os.getenv("SUPABASE_DB_URL") or settings.supabase_db_url or "").strip()
+    if not dsn:
         raise RuntimeError(
-            "SUPABASE_DB_URL não configurada. Informe a connection string no .env."
+            "Database connection is not configured. "
+            "Provide SUPABASE_DB_HOST + SUPABASE_DB_PASSWORD or SUPABASE_DB_URL."
         )
-    conn: PGConnection = psycopg2.connect(
-        settings.supabase_db_url,
-        cursor_factory=psycopg2.extras.RealDictCursor,
-    )
-    return conn
+    if dsn.upper().startswith("DATABASE_URL="):
+        dsn = dsn.split("=", 1)[1].strip()
+    if "sslmode=" not in dsn:
+        dsn = f"{dsn}{'&' if '?' in dsn else '?'}sslmode=require"
+
+    try:
+        conn: PGConnection = psycopg2.connect(
+            dsn,
+            cursor_factory=psycopg2.extras.RealDictCursor,
+        )
+        return conn
+    except Exception as e:
+        raise RuntimeError(f"Failed to connect with DSN: {e}")
+        # Defensive: never return None
+    raise RuntimeError("connect_db() reached an unexpected state (no connection returned).")
 
 
 
@@ -38,8 +80,7 @@ def execute_write(conn: PGConnection, sql: str, params: tuple | dict = ()) -> in
     Execute a write operation (INSERT, UPDATE, DELETE). Returns affected row count.
     """
     cur: PGCursor = conn.cursor()
-    try:
-        cur.execute(sql, params)
+    try:        
         cur.execute(sql, params)
         conn.commit()
         return cur.rowcount
@@ -176,18 +217,16 @@ def _migrate(conn: "PGConnection", target_version: int) -> None:
             raise RuntimeError(f"No migration registered for version {nxt}.")
         logger.info("Applying migration %s → %s ...", nxt - 1, nxt)
         try:
-            # Start transaction explicitly
-            conn.autocommit = False
+            # psycopg2 already starts a transaction on first statement.
+            # Just run migration and commit; on failure, rollback.
             mig(conn)
             _set_schema_version(conn, nxt)
             conn.commit()
-            logger.info("Migration to v%s completed.", nxt)
         except Exception as exc:
             conn.rollback()
             logger.error("Migration to v%s failed: %s", nxt, exc)
             raise
-        finally:
-            conn.autocommit = True
+
 
 # -----------------------------------------------------------------------------
 # Public API
@@ -254,8 +293,8 @@ def _get_logger() -> logging.Logger:
         encoding="utf-8",
     )
     formatter = logging.Formatter(
-        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="YYYY-%m-%d %H:%M:%S",
+    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
     )
     handler.setFormatter(formatter)
 

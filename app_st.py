@@ -3,7 +3,7 @@ Streamlit GUI for the Expense Control application.
 
 This app provides:
 - An \"Insert Data\" tab to register new expenses.
-- A \"View Data\" tab to inspect stored expenses.
+
 
 It relies on the core package for:
 - Domain model (Expense)
@@ -397,12 +397,12 @@ def page_analysis() -> None:
     # Button to select all months
     if st.sidebar.button("Display all months"):
         selected_months = month_labels.copy()
-    # Radio button to choose grouping
+    # Radio button to choose grouping (applies to both charts)
     view_by = st.sidebar.radio(
-        "Group pie chart by:",
+        "Group charts by:",
         options=["Category", "Subcategory"],
         index=0,
-        help="Select whether to display percentages by category or by subcategory."
+        help="Select whether to display expenses by category or by subcategory in both charts."
     )
     # -------------------------------------------------------------------------
     # Filter the snapshot by selected months
@@ -424,9 +424,13 @@ def page_analysis() -> None:
     # Aggregate data for pie chart
     agg_pie = filtered_df.groupby(group_col)["amount"].sum().reset_index(name="Total")
     agg_pie["Percentage"] = (agg_pie["Total"] / agg_pie["Total"].sum()) * 100
-    # Aggregate data for bar chart (by category)
-    agg_bar = filtered_df.groupby("category")["amount"].sum().reset_index(name="Total")
-    agg_bar = agg_bar.sort_values("Total", ascending=False)
+    # Aggregate data for bar chart (same grouping as view_by)
+    agg_bar = (
+        filtered_df.groupby(group_col)["amount"]
+        .sum()
+        .reset_index(name="Total")
+        .sort_values("Total", ascending=False)
+    )
     # -------------------------------------------------------------------------
     # Render charts
 
@@ -442,14 +446,17 @@ def page_analysis() -> None:
     pie_fig.update_layout(legend_title_text=view_by)
     st.plotly_chart(pie_fig, use_container_width=True)
 
-    st.subheader("Spending per Category (EUR)")
+    x_label = "Category" if view_by == "Category" else "Subcategory"
+    st.subheader(f"Spending per {view_by} (EUR)")
     bar_fig = px.bar(
         agg_bar,
-        x="category",
+        x=group_col,
         y="Total",
-        labels={"Total": "Amount (€)"},
-        title="Total spending by category",
+        labels={group_col: x_label, "Total": "Amount (€)"},
+        title=f"Total spending by {x_label.lower()}",
+        hover_data={group_col: False},
     )
+    
     st.plotly_chart(bar_fig, use_container_width=True)
 
 
@@ -462,12 +469,10 @@ def main() -> None:
     st.sidebar.title("Expense Control")
     
 
-    tab = st.sidebar.radio("Select page", ["Insert Data", "View Data", "Analysis"])
+    tab = st.sidebar.radio("Select page", ["Insert Data", "Analysis"])
 
     if tab == "Insert Data":
-        page_insert()
-    elif tab == "View Data":
-        page_view()
+        page_insert() 
     else:
         page_analysis()
 
