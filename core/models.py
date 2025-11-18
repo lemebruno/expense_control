@@ -86,3 +86,26 @@ class Expense:
     def to_tuple(self) -> tuple[Any, ...]:
         """Tuple in schema order (without id)."""
         return (self.dt, self.category, self.subcategory, self.amount, self.note)
+
+
+# -----------------------------------------------------------------------------
+# User model
+# -----------------------------------------------------------------------------
+class User:
+    """
+    User domain model used for authentication.
+    """
+    email: str
+    password_hash: str
+    id: Optional[int] = field(default=None, compare=False)
+
+    @classmethod
+    def from_row(cls, row: Mapping[str, Any]) -> "User":
+        return cls(
+            id=row.get("id") if hasattr(row, "get") else row["id"],
+            email=row.get("email") if hasattr(row, "get") else row["email"],
+            password_hash=row.get("password_hash") if hasattr(row, "get") else row["password_hash"],
+        )
+
+    def to_params(self) -> dict[str, Any]:
+        return {"id": self.id, "email": self.email, "password_hash": self.password_hash}
