@@ -123,8 +123,8 @@ def fetch_one(conn, sql: str, params: tuple | dict = ()) -> dict | None:
 # -----------------------------------------------------------------------------
 # Schema versioning for PostgreSQL
 # -----------------------------------------------------------------------------
-SCHEMA_VERSION: int = 1  # bump this when you add a new migration
-
+SCHEMA_VERSION: int = 2
+  
 def _ensure_schema_version_table(conn: "PGConnection") -> None:
     """
     Ensures the schema_version table exists.
