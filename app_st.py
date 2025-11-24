@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from typing import Any, Dict, List, Optional
-
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px  # For charts in the analysis page
@@ -39,7 +39,8 @@ from core import repo_expense, repo_user
 from core import sync_cycle
 from core import auth
 
-
+st.write("DEBUG_ENV_SUPABASE_URL:", os.environ.get("SUPABASE_URL", "MISSING"))
+st.write("DEBUG_SECRET_SUPABASE_URL:", st.secrets.get("SUPABASE_URL", "MISSING"))
 
 logger = logging.getLogger(__name__)
 
