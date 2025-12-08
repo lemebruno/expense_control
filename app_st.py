@@ -38,6 +38,7 @@ from core.models import Expense
 from core import repo_expense, repo_user
 from core import sync_cycle
 from core import auth
+from core import repo_shopping_list
 
 
 
@@ -557,6 +558,85 @@ def page_analysis() -> None:
     
     st.plotly_chart(bar_fig, use_container_width=True)
 
+# -----------------------------------------------------------------------------
+# Shopping List page
+# -----------------------------------------------------------------------------
+def page_shopping_list() -> None:
+    st.header("Shopping List")
+
+    ensure_db_ready()
+    db_error = st.session_state.get("db_error")
+    if db_error:
+        st.warning(f"Database is not ready: {db_error}")
+        return
+
+    user_id = st.session_state.get("user_id")
+    if not user_id:
+        st.error("User not found in session. Please log in again.")
+        return
+
+    # ----------------- Seção: adicionar item -----------------
+    st.subheader("Add item")
+
+    new_item = st.text_input("Item to buy", key="shopping_new_item")
+    add_clicked = st.button("Add item")
+
+    if add_clicked:
+        item_clean = (new_item or "").strip()
+        if not item_clean:
+            st.warning("Type an item before adding.")
+        else:
+            try:
+                repo_shopping_list.insert_item(user_id, item_clean)
+                # limpa o campo e recarrega a página para atualizar a lista
+                st.session_state["shopping_new_item"] = ""
+                st.success(f"Added: {item_clean}")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Failed to add item: {exc}")
+
+    st.markdown("---")
+
+    # ----------------- Seção: lista atual com checkboxes -----------------
+    st.subheader("Current shopping list")
+
+    try:
+        items = repo_shopping_list.list_items(user_id)
+    except Exception as exc:
+        st.error(f"Failed to load shopping list: {exc}")
+        return
+
+    if not items:
+        st.info("Your shopping list is empty.")
+        return
+
+    with st.form("shopping_list_form"):
+        selected_ids: list[int] = []
+        for it in items:
+            checked = st.checkbox(
+                it.item,
+                key=f"shopping_item_{it.id}",
+            )
+            if checked:
+                selected_ids.append(it.id)
+
+        delete_clicked = st.form_submit_button("Save purchased items")
+
+    if delete_clicked:
+        if not selected_ids:
+            st.warning("No items selected.")
+        else:
+            try:
+                repo_shopping_list.delete_items(selected_ids)
+                # limpa os estados dos checkboxes dos itens que saíram
+                for iid in selected_ids:
+                    st.session_state.pop(f"shopping_item_{iid}", None)
+                st.success("List updated.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Failed to update list: {exc}")
+
+
 
 # -----------------------------------------------------------------------------
 # Main entry point for Streamlit
@@ -575,11 +655,13 @@ def main() -> None:
         st.session_state.pop("user_id", None)
         st.rerun()
 
-    tab = st.sidebar.radio("Select page", ["Insert Data", "Analysis"], index=0)
+    tab = st.sidebar.radio("Select page", ["Insert Data", "Analysis","Shopping List"], index=0)
     if tab == "Insert Data":
         page_insert()
-    else:
+    elif tab == "Analysis":
         page_analysis()
+    else:
+        page_shopping_list()
 
 
 if __name__ == "__main__":
