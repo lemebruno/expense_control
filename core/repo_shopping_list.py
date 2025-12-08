@@ -16,12 +16,12 @@ def insert_item(item: str) -> int:
     """
     with connect_db() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, ( item_clean))
+            cur.execute(sql, ( item_clean,))
             row = cur.fetchone()
             conn.commit()
             return int(row["id"])
 
-def list_items(user_id: int) -> List[ShoppingItem]:
+def list_items() -> List[ShoppingItem]:
     sql = """
         SELECT id, item, created_at
           FROM shopping_list         

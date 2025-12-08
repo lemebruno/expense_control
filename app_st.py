@@ -570,8 +570,7 @@ def page_shopping_list() -> None:
         st.warning(f"Database is not ready: {db_error}")
         return
 
-    user_id = st.session_state.get("user_id")
-    if not user_id:
+    if "user_id" not in st.session_state:
         st.error("User not found in session. Please log in again.")
         return
 
@@ -587,7 +586,7 @@ def page_shopping_list() -> None:
             st.warning("Type an item before adding.")
         else:
             try:
-                repo_shopping_list.insert_item(user_id, item_clean)
+                repo_shopping_list.insert_item(item_clean)
                 # limpa o campo e recarrega a página para atualizar a lista
                 st.session_state["shopping_new_item"] = ""
                 st.success(f"Added: {item_clean}")
@@ -601,7 +600,7 @@ def page_shopping_list() -> None:
     st.subheader("Current shopping list")
 
     try:
-        items = repo_shopping_list.list_items(user_id)
+        items = repo_shopping_list.list_items()
     except Exception as exc:
         st.error(f"Failed to load shopping list: {exc}")
         return
