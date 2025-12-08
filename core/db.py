@@ -123,7 +123,7 @@ def fetch_one(conn, sql: str, params: tuple | dict = ()) -> dict | None:
 # -----------------------------------------------------------------------------
 # Schema versioning for PostgreSQL
 # -----------------------------------------------------------------------------
-SCHEMA_VERSION: int = 2
+SCHEMA_VERSION: int = 3
   
 def _ensure_schema_version_table(conn: "PGConnection") -> None:
     """
@@ -207,6 +207,21 @@ def _migration_2_create_users(conn: "PGConnection") -> None:
     conn.commit()
 
 MIGRATIONS[2] = _migration_2_create_users
+
+def _migration_3_create_shopping_list(conn:"PGConnection") -> None:
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS shopping_list (
+                id SERIAL PRIMARY KEY,
+                item TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+                );"""
+                )
+        cur.execute("""
+                    CREATE INDEX IF NOT EXISTS ix_shopping_list_item
+                    ON shopping_list(item);""")
+    conn.commit()
+MIGRATIONS[3] = _migration_3_create_shopping_list
 
 def _migrate(conn: "PGConnection", target_version: int) -> None:
     """
