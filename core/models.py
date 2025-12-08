@@ -110,3 +110,24 @@ class User:
 
     def to_params(self) -> dict[str, Any]:
         return {"id": self.id, "email": self.email, "password_hash": self.password_hash}
+
+
+@dataclass(slots=True)
+class ShoppingItem:
+    item: str
+    id: Optional[int] = field(default=None,compare=False)
+    created_at: Optional[str] = field(default=None,compare=False)
+
+
+    @classmethod
+    def from_row(cls,row:Mapping[str, Any]) -> "ShoppingItem":
+        return cls(
+            id=row.get("id") if hasattr(row, "get") else row["id"],
+            item=row.get("item") if hasattr(row, "get") else row["item"],
+            created_at=row.get("created_at") if hasattr(row, "get") else row["created_at"],
+        )
+    
+    def to_params(self) -> dict[str, Any]:
+        return {"id":self.id,
+                "item":self.item,
+                "created_at":self.created_at}
