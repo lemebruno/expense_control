@@ -574,7 +574,7 @@ def page_shopping_list() -> None:
         st.error("User not found in session. Please log in again.")
         return
 
-    # ----------------- Seção: adicionar item -----------------
+    
     st.subheader("Add item")
 
     new_item = st.text_input("Item to buy", key="shopping_new_item")
@@ -587,7 +587,7 @@ def page_shopping_list() -> None:
         else:
             try:
                 repo_shopping_list.insert_item(item_clean)
-                # limpa o campo e recarrega a página para atualizar a lista
+                
                 st.session_state["shopping_new_item"] = ""
                 st.success(f"Added: {item_clean}")
                 st.rerun()
@@ -596,7 +596,7 @@ def page_shopping_list() -> None:
 
     st.markdown("---")
 
-    # ----------------- Seção: lista atual com checkboxes -----------------
+    # ------
     st.subheader("Current shopping list")
 
     try:
@@ -627,7 +627,7 @@ def page_shopping_list() -> None:
         else:
             try:
                 repo_shopping_list.delete_items(selected_ids)
-                # limpa os estados dos checkboxes dos itens que saíram
+                
                 for iid in selected_ids:
                     st.session_state.pop(f"shopping_item_{iid}", None)
                 st.success("List updated.")
