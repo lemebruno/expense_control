@@ -574,7 +574,15 @@ def page_shopping_list() -> None:
         st.error("User not found in session. Please log in again.")
         return
 
-    
+    # ------------------------------------------------------------------
+    # Inicializa / reseta o campo de texto ANTES de criar o widget
+    # ------------------------------------------------------------------
+    if "shopping_new_item" not in st.session_state:
+        st.session_state["shopping_new_item"] = ""
+    if st.session_state.get("shopping_reset"):
+        st.session_state["shopping_new_item"] = ""
+        st.session_state["shopping_reset"] = False
+
     st.subheader("Add item")
 
     new_item = st.text_input("Item to buy", key="shopping_new_item")
@@ -587,8 +595,8 @@ def page_shopping_list() -> None:
         else:
             try:
                 repo_shopping_list.insert_item(item_clean)
-                
-                st.session_state["shopping_new_item"] = ""
+                # sinaliza que deve limpar o campo no próximo rerun
+                st.session_state["shopping_reset"] = True
                 st.success(f"Added: {item_clean}")
                 st.rerun()
             except Exception as exc:
@@ -596,7 +604,6 @@ def page_shopping_list() -> None:
 
     st.markdown("---")
 
-    # ------
     st.subheader("Current shopping list")
 
     try:
@@ -627,13 +634,13 @@ def page_shopping_list() -> None:
         else:
             try:
                 repo_shopping_list.delete_items(selected_ids)
-                
                 for iid in selected_ids:
                     st.session_state.pop(f"shopping_item_{iid}", None)
                 st.success("List updated.")
                 st.rerun()
             except Exception as exc:
                 st.error(f"Failed to update list: {exc}")
+
 
 
 
