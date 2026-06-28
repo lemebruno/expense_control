@@ -730,11 +730,15 @@ def page_analysis() -> None:
         if not selected_items:
             st.info(f"Select one or more {trend_label.lower()}s above to see their spending trend.")
         else:
+            month_order = {m: i for i, m in enumerate(month_labels)}
             trend_df = (
                 df[df[trend_col].isin(selected_items)]
                 .groupby(["month_label", trend_col])["amount"]
                 .sum()
                 .reset_index(name="Total")
+                .assign(_sort=lambda d: d["month_label"].map(month_order))
+                .sort_values(["_sort", trend_col])
+                .drop(columns="_sort")
             )
             line_fig = px.line(
                 trend_df,
