@@ -485,7 +485,7 @@ def page_analysis() -> None:
         default_selection = [now_label]
     else:
         default_selection = [month_labels[-1]] if month_labels else []
-    # Sidebar controls for analysis
+    # Sidebar controls for analysis (apply to Charts tab)
     st.sidebar.header("Filters (Analysis)")
     selected_months = st.sidebar.multiselect(
         "Select months to analyse:",
@@ -503,128 +503,192 @@ def page_analysis() -> None:
         index=0,
         help="Select whether to display expenses by category or by subcategory in both charts."
     )
-    # -------------------------------------------------------------------------
-    # Filter the snapshot by selected months
-    # -------------------------------------------------------------------------
-    filtered_df = df.copy()
-    if selected_months:
-        filtered_df = filtered_df[filtered_df["month_label"].isin(selected_months)]
-        if filtered_df.empty:
-            st.warning("No expenses match the selected months.")
-            return
-    # Determine grouping column
-    group_col = "category" if view_by == "Category" else "subcategory"
-    # Remove rows without subcategory if grouping by subcategory
-    if group_col == "subcategory":
-        filtered_df = filtered_df[filtered_df["subcategory"].notna()]
-        if filtered_df.empty:
-            st.warning("No subcategory data found for the selected months.")
-            return
-    # Aggregate by the selected grouping column
-    agg = (
-        filtered_df.groupby(group_col)["amount"]
-        .sum()
-        .reset_index(name="Total")
-        .sort_values("Total", ascending=False)
-    )
-    total_spent = agg["Total"].sum()
 
-    # -------------------------------------------------------------------------
-    # Summary metrics
-    # -------------------------------------------------------------------------
-    cat_agg = (
-        filtered_df.groupby("category")["amount"]
-        .sum()
-        .reset_index(name="Total")
-        .sort_values("Total", ascending=False)
-    )
-    sub_agg = (
-        filtered_df[filtered_df["subcategory"].notna()]
-        .groupby("subcategory")["amount"]
-        .sum()
-        .reset_index(name="Total")
-        .sort_values("Total", ascending=False)
-    )
+    tab1, tab2 = st.tabs(["Charts", "Monthly Summary"])
 
-    top_cat = cat_agg.iloc[0] if not cat_agg.empty else None
-    top_sub = sub_agg.iloc[0] if not sub_agg.empty else None
+    # =========================================================================
+    # Tab 1 — Charts (existing content)
+    # =========================================================================
+    with tab1:
+        # Filter the snapshot by selected months
+        filtered_df = df.copy()
+        if selected_months:
+            filtered_df = filtered_df[filtered_df["month_label"].isin(selected_months)]
+            if filtered_df.empty:
+                st.warning("No expenses match the selected months.")
+                st.stop()
+        # Determine grouping column
+        group_col = "category" if view_by == "Category" else "subcategory"
+        # Remove rows without subcategory if grouping by subcategory
+        if group_col == "subcategory":
+            filtered_df = filtered_df[filtered_df["subcategory"].notna()]
+            if filtered_df.empty:
+                st.warning("No subcategory data found for the selected months.")
+                st.stop()
+        # Aggregate by the selected grouping column
+        agg = (
+            filtered_df.groupby(group_col)["amount"]
+            .sum()
+            .reset_index(name="Total")
+            .sort_values("Total", ascending=False)
+        )
+        total_spent = agg["Total"].sum()
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Spent", f"€ {total_spent:,.2f}")
-    if top_cat is not None:
-        col2.metric("Biggest Category", top_cat["category"], f"€ {top_cat['Total']:,.2f}")
-    if top_sub is not None:
-        col3.metric("Biggest Subcategory", top_sub["subcategory"], f"€ {top_sub['Total']:,.2f}")
+        # Summary metrics
+        cat_agg = (
+            filtered_df.groupby("category")["amount"]
+            .sum()
+            .reset_index(name="Total")
+            .sort_values("Total", ascending=False)
+        )
+        sub_agg = (
+            filtered_df[filtered_df["subcategory"].notna()]
+            .groupby("subcategory")["amount"]
+            .sum()
+            .reset_index(name="Total")
+            .sort_values("Total", ascending=False)
+        )
 
-    st.divider()
+        top_cat = cat_agg.iloc[0] if not cat_agg.empty else None
+        top_sub = sub_agg.iloc[0] if not sub_agg.empty else None
 
-    # -------------------------------------------------------------------------
-    # Render charts
-    # -------------------------------------------------------------------------
-    x_label = "Category" if view_by == "Category" else "Subcategory"
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Spent", f"€ {total_spent:,.2f}")
+        if top_cat is not None:
+            col2.metric("Biggest Category", top_cat["category"], f"€ {top_cat['Total']:,.2f}")
+        if top_sub is not None:
+            col3.metric("Biggest Subcategory", top_sub["subcategory"], f"€ {top_sub['Total']:,.2f}")
 
-    if view_by == "Category":
-        # Donut chart — top 5 + "Others"
-        TOP_N = 5
-        if len(agg) > TOP_N:
-            top_df = agg.head(TOP_N).copy()
-            others_total = agg.iloc[TOP_N:]["Total"].sum()
-            others_row = pd.DataFrame([{group_col: "Others", "Total": others_total}])
-            donut_df = pd.concat([top_df, others_row], ignore_index=True)
+        st.divider()
+
+        # Render charts
+        x_label = "Category" if view_by == "Category" else "Subcategory"
+
+        if view_by == "Category":
+            TOP_N = 5
+            if len(agg) > TOP_N:
+                top_df = agg.head(TOP_N).copy()
+                others_total = agg.iloc[TOP_N:]["Total"].sum()
+                others_row = pd.DataFrame([{group_col: "Others", "Total": others_total}])
+                donut_df = pd.concat([top_df, others_row], ignore_index=True)
+            else:
+                donut_df = agg.copy()
+
+            donut_df["Percentage"] = (donut_df["Total"] / donut_df["Total"].sum()) * 100
+
+            st.subheader("Expenses by Category (%)")
+            pie_fig = px.pie(
+                donut_df,
+                names=group_col,
+                values="Percentage",
+                hole=0.4,
+                title="Top 5 categories + Others",
+            )
+            pie_fig.update_traces(
+                textinfo="percent+label",
+                textposition="outside",
+            )
+            pie_fig.update_layout(legend_title_text="Category", showlegend=True)
+            st.plotly_chart(pie_fig, use_container_width=True)
+
         else:
-            donut_df = agg.copy()
+            st.subheader("Expenses by Subcategory (€)")
+            bar_h_fig = px.bar(
+                agg,
+                x="Total",
+                y=group_col,
+                orientation="h",
+                labels={group_col: "Subcategory", "Total": "Amount (€)"},
+                title="Total spending by subcategory",
+                text=agg["Total"].apply(lambda v: f"€ {v:,.2f}"),
+            )
+            bar_h_fig.update_traces(textposition="outside")
+            bar_h_fig.update_layout(
+                yaxis={"categoryorder": "total ascending"},
+                xaxis_title="Amount (€)",
+                yaxis_title=None,
+                margin={"r": 120},
+            )
+            st.plotly_chart(bar_h_fig, use_container_width=True)
 
-        donut_df["Percentage"] = (donut_df["Total"] / donut_df["Total"].sum()) * 100
-
-        st.subheader("Expenses by Category (%)")
-        pie_fig = px.pie(
-            donut_df,
-            names=group_col,
-            values="Percentage",
-            hole=0.4,
-            title="Top 5 categories + Others",
-        )
-        pie_fig.update_traces(
-            textinfo="percent+label",
-            textposition="outside",
-        )
-        pie_fig.update_layout(legend_title_text="Category", showlegend=True)
-        st.plotly_chart(pie_fig, use_container_width=True)
-
-    else:
-        # Horizontal bar chart for subcategory view
-        st.subheader("Expenses by Subcategory (€)")
-        bar_h_fig = px.bar(
+        st.subheader(f"Spending per {x_label} (€)")
+        bar_fig = px.bar(
             agg,
-            x="Total",
-            y=group_col,
-            orientation="h",
-            labels={group_col: "Subcategory", "Total": "Amount (€)"},
-            title="Total spending by subcategory",
+            x=group_col,
+            y="Total",
+            labels={group_col: x_label, "Total": "Amount (€)"},
+            title=f"Total spending by {x_label.lower()}",
             text=agg["Total"].apply(lambda v: f"€ {v:,.2f}"),
         )
-        bar_h_fig.update_traces(textposition="outside")
-        bar_h_fig.update_layout(
-            yaxis={"categoryorder": "total ascending"},
-            xaxis_title="Amount (€)",
-            yaxis_title=None,
-            margin={"r": 120},
-        )
-        st.plotly_chart(bar_h_fig, use_container_width=True)
+        bar_fig.update_traces(textposition="outside")
+        bar_fig.update_layout(uniformtext_minsize=8, uniformtext_mode="hide")
+        st.plotly_chart(bar_fig, use_container_width=True)
 
-    # Vertical bar chart (shared for both views)
-    st.subheader(f"Spending per {x_label} (€)")
-    bar_fig = px.bar(
-        agg,
-        x=group_col,
-        y="Total",
-        labels={group_col: x_label, "Total": "Amount (€)"},
-        title=f"Total spending by {x_label.lower()}",
-        text=agg["Total"].apply(lambda v: f"€ {v:,.2f}"),
-    )
-    bar_fig.update_traces(textposition="outside")
-    bar_fig.update_layout(uniformtext_minsize=8, uniformtext_mode="hide")
-    st.plotly_chart(bar_fig, use_container_width=True)
+    # =========================================================================
+    # Tab 2 — Monthly Summary
+    # =========================================================================
+    with tab2:
+        # -----------------------------------------------------------------
+        # Section 1: Monthly Overview Table
+        # -----------------------------------------------------------------
+        st.subheader("Monthly Overview")
+        pivot = df.pivot_table(
+            index="month_label",
+            columns="category",
+            values="amount",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        pivot = pivot.reindex([m for m in month_labels if m in pivot.index])
+        pivot.index.name = "Month"
+        pivot.columns.name = None
+        pivot["Total"] = pivot.sum(axis=1)
+
+        st.dataframe(
+            pivot,
+            column_config={col: st.column_config.NumberColumn(format="€ %.2f") for col in pivot.columns},
+            use_container_width=True,
+        )
+
+        st.divider()
+
+        # -----------------------------------------------------------------
+        # Section 2: Spending Trend by Subcategory
+        # -----------------------------------------------------------------
+        st.subheader("Spending Trend by Subcategory")
+        all_subcats = sorted(df["subcategory"].dropna().unique().tolist())
+        selected_subs = st.multiselect(
+            "Select subcategories to display:",
+            options=all_subcats,
+            default=[],
+        )
+
+        if not selected_subs:
+            st.info("Select one or more subcategories above to see their spending trend over time.")
+        else:
+            trend_df = (
+                df[df["subcategory"].isin(selected_subs)]
+                .groupby(["month_label", "subcategory"])["amount"]
+                .sum()
+                .reset_index(name="Total")
+            )
+            line_fig = px.line(
+                trend_df,
+                x="month_label",
+                y="Total",
+                color="subcategory",
+                markers=True,
+                labels={"month_label": "Month", "Total": "Amount (€)", "subcategory": "Subcategory"},
+                title="Monthly spending by subcategory",
+                category_orders={"month_label": month_labels},
+            )
+            line_fig.update_traces(mode="lines+markers")
+            line_fig.update_layout(
+                hovermode="x unified",
+                xaxis_title="Month",
+                yaxis_title="Amount (€)",
+            )
+            st.plotly_chart(line_fig, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # Shopping List page
