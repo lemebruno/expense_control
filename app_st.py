@@ -520,42 +520,110 @@ def page_analysis() -> None:
         if filtered_df.empty:
             st.warning("No subcategory data found for the selected months.")
             return
-    # Aggregate data for pie chart
-    agg_pie = filtered_df.groupby(group_col)["amount"].sum().reset_index(name="Total")
-    agg_pie["Percentage"] = (agg_pie["Total"] / agg_pie["Total"].sum()) * 100
-    # Aggregate data for bar chart (same grouping as view_by)
-    agg_bar = (
+    # Aggregate by the selected grouping column
+    agg = (
         filtered_df.groupby(group_col)["amount"]
         .sum()
         .reset_index(name="Total")
         .sort_values("Total", ascending=False)
     )
+    total_spent = agg["Total"].sum()
+
+    # -------------------------------------------------------------------------
+    # Summary metrics
+    # -------------------------------------------------------------------------
+    cat_agg = (
+        filtered_df.groupby("category")["amount"]
+        .sum()
+        .reset_index(name="Total")
+        .sort_values("Total", ascending=False)
+    )
+    sub_agg = (
+        filtered_df[filtered_df["subcategory"].notna()]
+        .groupby("subcategory")["amount"]
+        .sum()
+        .reset_index(name="Total")
+        .sort_values("Total", ascending=False)
+    )
+
+    top_cat = cat_agg.iloc[0] if not cat_agg.empty else None
+    top_sub = sub_agg.iloc[0] if not sub_agg.empty else None
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Spent", f"€ {total_spent:,.2f}")
+    if top_cat is not None:
+        col2.metric("Biggest Category", top_cat["category"], f"€ {top_cat['Total']:,.2f}")
+    if top_sub is not None:
+        col3.metric("Biggest Subcategory", top_sub["subcategory"], f"€ {top_sub['Total']:,.2f}")
+
+    st.divider()
+
     # -------------------------------------------------------------------------
     # Render charts
-
-    st.subheader(f"Expenses by {view_by} (Percent)")
-    pie_fig = px.pie(
-        agg_pie,
-        names=group_col,
-        values="Percentage",
-        hole=0.4,
-        title=f"Percentage of expenses by {view_by.lower()}",
-    )
-    pie_fig.update_traces(textinfo="percent+label")
-    pie_fig.update_layout(legend_title_text=view_by)
-    st.plotly_chart(pie_fig, use_container_width=True)
-
+    # -------------------------------------------------------------------------
     x_label = "Category" if view_by == "Category" else "Subcategory"
-    st.subheader(f"Spending per {view_by} (EUR)")
+
+    if view_by == "Category":
+        # Donut chart — top 5 + "Others"
+        TOP_N = 5
+        if len(agg) > TOP_N:
+            top_df = agg.head(TOP_N).copy()
+            others_total = agg.iloc[TOP_N:]["Total"].sum()
+            others_row = pd.DataFrame([{group_col: "Others", "Total": others_total}])
+            donut_df = pd.concat([top_df, others_row], ignore_index=True)
+        else:
+            donut_df = agg.copy()
+
+        donut_df["Percentage"] = (donut_df["Total"] / donut_df["Total"].sum()) * 100
+
+        st.subheader("Expenses by Category (%)")
+        pie_fig = px.pie(
+            donut_df,
+            names=group_col,
+            values="Percentage",
+            hole=0.4,
+            title="Top 5 categories + Others",
+        )
+        pie_fig.update_traces(
+            textinfo="percent+label",
+            textposition="outside",
+        )
+        pie_fig.update_layout(legend_title_text="Category", showlegend=True)
+        st.plotly_chart(pie_fig, use_container_width=True)
+
+    else:
+        # Horizontal bar chart for subcategory view
+        st.subheader("Expenses by Subcategory (€)")
+        bar_h_fig = px.bar(
+            agg,
+            x="Total",
+            y=group_col,
+            orientation="h",
+            labels={group_col: "Subcategory", "Total": "Amount (€)"},
+            title="Total spending by subcategory",
+            text=agg["Total"].apply(lambda v: f"€ {v:,.2f}"),
+        )
+        bar_h_fig.update_traces(textposition="outside")
+        bar_h_fig.update_layout(
+            yaxis={"categoryorder": "total ascending"},
+            xaxis_title="Amount (€)",
+            yaxis_title=None,
+            margin={"r": 120},
+        )
+        st.plotly_chart(bar_h_fig, use_container_width=True)
+
+    # Vertical bar chart (shared for both views)
+    st.subheader(f"Spending per {x_label} (€)")
     bar_fig = px.bar(
-        agg_bar,
+        agg,
         x=group_col,
         y="Total",
         labels={group_col: x_label, "Total": "Amount (€)"},
         title=f"Total spending by {x_label.lower()}",
-        hover_data={group_col: False},
+        text=agg["Total"].apply(lambda v: f"€ {v:,.2f}"),
     )
-    
+    bar_fig.update_traces(textposition="outside")
+    bar_fig.update_layout(uniformtext_minsize=8, uniformtext_mode="hide")
     st.plotly_chart(bar_fig, use_container_width=True)
 
 # -----------------------------------------------------------------------------
