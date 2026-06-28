@@ -632,43 +632,76 @@ def page_analysis() -> None:
         # Section 1: Monthly Overview Table
         # -----------------------------------------------------------------
         st.subheader("Monthly Overview")
-        pivot = df.pivot_table(
-            index="month_label",
-            columns="category",
-            values="amount",
-            aggfunc="sum",
-            fill_value=0,
-        )
-        pivot = pivot.reindex([m for m in month_labels if m in pivot.index])
-        pivot.index.name = "Month"
-        pivot.columns.name = None
-        pivot["Total"] = pivot.sum(axis=1)
 
-        st.dataframe(
-            pivot,
-            column_config={col: st.column_config.NumberColumn(format="€ %.2f") for col in pivot.columns},
-            use_container_width=True,
-        )
+        available_years = sorted(df["date"].dt.year.unique().tolist(), reverse=True)
+        now_year = datetime.now(ZoneInfo("Europe/Dublin")).year
+        default_year = now_year if now_year in available_years else available_years[0]
+
+        col_y, col_m = st.columns([1, 3])
+        with col_y:
+            selected_year = st.selectbox(
+                "Year:",
+                options=available_years,
+                index=available_years.index(default_year),
+            )
+        year_months = [m for m in month_labels if m.endswith(str(selected_year))]
+        with col_m:
+            selected_year_months = st.multiselect(
+                "Months:",
+                options=year_months,
+                default=year_months,
+            )
+
+        if not selected_year_months:
+            st.info("Select at least one month to display the table.")
+        else:
+            year_df = df[df["month_label"].isin(selected_year_months)]
+            pivot = year_df.pivot_table(
+                index="month_label",
+                columns="category",
+                values="amount",
+                aggfunc="sum",
+                fill_value=0,
+            )
+            pivot = pivot.reindex([m for m in month_labels if m in pivot.index])
+            pivot.index.name = "Month"
+            pivot.columns.name = None
+            pivot["Total"] = pivot.sum(axis=1)
+
+            st.dataframe(
+                pivot,
+                column_config={col: st.column_config.NumberColumn(format="€ %.2f") for col in pivot.columns},
+                use_container_width=True,
+            )
 
         st.divider()
 
         # -----------------------------------------------------------------
-        # Section 2: Spending Trend by Subcategory
+        # Section 2: Spending Trend
         # -----------------------------------------------------------------
-        st.subheader("Spending Trend by Subcategory")
-        all_subcats = sorted(df["subcategory"].dropna().unique().tolist())
-        selected_subs = st.multiselect(
-            "Select subcategories to display:",
-            options=all_subcats,
-            default=[],
+        st.subheader("Spending Trend")
+
+        trend_by = st.radio("Group by:", options=["Subcategory", "Category"], horizontal=True)
+        trend_col = "subcategory" if trend_by == "Subcategory" else "category"
+        trend_label = trend_by
+
+        all_options = sorted(df[trend_col].dropna().unique().tolist())
+        default_opts = all_options[:3]
+        selected_items = st.multiselect(
+            f"Select {trend_label.lower()}s to display:",
+            options=all_options,
+            default=default_opts,
         )
 
-        if not selected_subs:
-            st.info("Select one or more subcategories above to see their spending trend over time.")
+        if len(selected_items) > 5:
+            st.warning("Showing more than 5 lines may make the chart hard to read.")
+
+        if not selected_items:
+            st.info(f"Select one or more {trend_label.lower()}s above to see their spending trend.")
         else:
             trend_df = (
-                df[df["subcategory"].isin(selected_subs)]
-                .groupby(["month_label", "subcategory"])["amount"]
+                df[df[trend_col].isin(selected_items)]
+                .groupby(["month_label", trend_col])["amount"]
                 .sum()
                 .reset_index(name="Total")
             )
@@ -676,15 +709,23 @@ def page_analysis() -> None:
                 trend_df,
                 x="month_label",
                 y="Total",
-                color="subcategory",
+                color=trend_col,
                 markers=True,
-                labels={"month_label": "Month", "Total": "Amount (€)", "subcategory": "Subcategory"},
-                title="Monthly spending by subcategory",
+                line_shape="spline",
+                labels={"month_label": "Month", "Total": "Amount (€)", trend_col: trend_label},
+                title=f"Monthly spending by {trend_label.lower()}",
                 category_orders={"month_label": month_labels},
+                color_discrete_sequence=px.colors.qualitative.Set2,
             )
-            line_fig.update_traces(mode="lines+markers")
+            line_fig.update_traces(mode="lines+markers", marker=dict(size=7), line=dict(width=2))
             line_fig.update_layout(
                 hovermode="x unified",
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.07)", griddash="dot", zeroline=False),
+                yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.07)", griddash="dot", zeroline=False),
+                legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title=None),
+                margin=dict(b=80),
                 xaxis_title="Month",
                 yaxis_title="Amount (€)",
             )
