@@ -674,6 +674,37 @@ def page_analysis() -> None:
                 use_container_width=True,
             )
 
+            st.subheader("Monthly Overview by Subcategory")
+            all_subcats_table = sorted(year_df["subcategory"].dropna().unique().tolist())
+            selected_subcats_table = st.multiselect(
+                "Filter subcategories (columns):",
+                options=all_subcats_table,
+                default=all_subcats_table,
+                key="tab2_subcat_cols",
+            )
+
+            if not selected_subcats_table:
+                st.info("Select at least one subcategory to display the table.")
+            else:
+                sub_source = year_df[year_df["subcategory"].isin(selected_subcats_table)]
+                pivot_sub = sub_source.pivot_table(
+                    index="month_label",
+                    columns="subcategory",
+                    values="amount",
+                    aggfunc="sum",
+                    fill_value=0,
+                )
+                pivot_sub = pivot_sub.reindex([m for m in month_labels if m in pivot_sub.index])
+                pivot_sub.index.name = "Month"
+                pivot_sub.columns.name = None
+                pivot_sub["Total"] = pivot_sub.sum(axis=1)
+
+                st.dataframe(
+                    pivot_sub,
+                    column_config={col: st.column_config.NumberColumn(format="€ %.2f") for col in pivot_sub.columns},
+                    use_container_width=True,
+                )
+
         st.divider()
 
         # -----------------------------------------------------------------
@@ -711,7 +742,7 @@ def page_analysis() -> None:
                 y="Total",
                 color=trend_col,
                 markers=True,
-                line_shape="spline",
+                line_shape="linear",
                 labels={"month_label": "Month", "Total": "Amount (€)", trend_col: trend_label},
                 title=f"Monthly spending by {trend_label.lower()}",
                 category_orders={"month_label": month_labels},
