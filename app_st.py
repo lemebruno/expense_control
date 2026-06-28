@@ -146,8 +146,8 @@ def page_login() -> None:
 if _validators.CATEGORY_TREE is None:
     DEFAULT_CATEGORY_TREE: Dict[str, List[str]] = {        
         "Housing": ["Groceries","Rent", "Utilities", "Maintenance","Energy Bills","Internet","Phone", "Streaming / Subscriptions"],
-        "Transportation": ["Public Transport", "Fuel", "Car taxes", "Maintenance / Repairs","Parking","Tolls"],
-        "Savings / Investments": ["Savings", "Retirement", "Stocks"],
+        "Transportation": ["Public Transport", "Fuel", "Car taxes", "Maintenance / Repairs","Parking","Tolls","Insurance"],
+        "Savings / Investments": ["Savings", "Retirement", "Stocks", "Financing"],
         "Leisure / Entertainment": ["Movies", "Tours / Concerts", "Games","Restaurants","Coffee Shops"],
         "Health": ["Gym", "Doctor", "Pharmacy","Supplements","Exams"],
         "Pets": ["Food", "Vet", "Grooming","Toys","Remedies"],
